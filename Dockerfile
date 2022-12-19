@@ -1,4 +1,4 @@
-FROM machina/base-alpine
+FROM behren/machina-base-alpine:latest
 
 COPY requirements.txt /tmp/
 RUN pip3 install --trusted-host pypi.org \
