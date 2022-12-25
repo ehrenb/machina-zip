@@ -8,6 +8,8 @@ from machina.core.worker import Worker
 
 class ZipAnalyzer(Worker):
     types = ["zip"]
+    next_queues = ['Identifier']
+
 
     def __init__(self, *args, **kwargs):
         super(ZipAnalyzer, self).__init__(*args, **kwargs)
@@ -37,11 +39,8 @@ class ZipAnalyzer(Worker):
                         "id": data['id'], #I think this is the only field needed, we can grab the unique node based on id alone
                         "type": data['type']},
                     'type': 'apk'}
+            self.publish_next(json.dumps(body))
 
-            channel = self.get_channel(self.config['rabbitmq'])
-            channel.basic_publish(exchange='machina',
-                routing_key='Identifier',
-                body=json.dumps(body))
 
         # Unzip and send each file to the Identifier
         else:
@@ -50,27 +49,27 @@ class ZipAnalyzer(Worker):
                     with tempfile.TemporaryDirectory() as tmpdir:
                         filepath = zf.extract(name, tmpdir)
                         if os.path.isfile(filepath):
+
                             # send the file back to the Identifier
                             with open(filepath, 'rb') as f:
                                 data_encoded = base64.b64encode(f.read()).decode()
+
                             body = {"data": data_encoded}
                             self.logger.info(f"submitting unzipped: {filepath}")
-                            channel = self.get_channel(self.config['rabbitmq'])
-                            channel.basic_publish(exchange='machina',
-                                routing_key='Identifier',
-                                body=json.dumps(body))
+                            self.publish_next(json.dumps(body))
+
+
                 except RuntimeError:
                     for password in self.config['worker']['passwords']:
                         try:
                             with tempfile.TemporaryDirectory() as tmpdir:
                                 filepath = zf.extract(name, tmpdir, pwd=password)
                                 if os.path.isfile(filepath):
+
                                     body = {"data": data_encoded}
                                     self.logger.info(f"submitting unzipped: {filepath}")
-                                    channel = self.get_channel(self.config['rabbitmq'])
-                                    channel.basic_publish(exchange='machina',
-                                        routing_key='Identifier',
-                                        body=json.dumps(body))
+                                    self.publish_next(json.dumps(body))
+
                         except RuntimeError:
                             self.logger.warn(f"could not unzip {name} with password {password}")
                             pass
